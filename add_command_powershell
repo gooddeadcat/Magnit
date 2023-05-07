@@ -1,0 +1,4 @@
+Function build_jester {docker build --pull --rm -f "Dockerfile" -t jester "."}
+Set-Alias -Name build -Value build_jester
+Function run_jester {docker run --rm -p 6000:6000 -v ~/jester/log:/jester/log -v ~/jester/data:/jester/data --name j_script jester:latest}
+Set-Alias -Name joke -Value run_jester
