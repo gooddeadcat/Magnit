@@ -11,7 +11,7 @@ from .config import *
 # времени не было их подружить, так что тут можно пересоздать 
 # logger из logging
 logger.add(LOG_FOLDER + "log.log")
-logger.info("Наш запуск")
+logger.info("Запуск Jester")
 
 # Создаем сервер и убираем кодирование ответа
 app = Flask(__name__)
@@ -61,12 +61,8 @@ def upload_file():
     # Загружаем
     if file and allowed_file(file.filename):
         filename = hashlib.md5(file.filename.encode()).hexdigest() 
-        file.save(
-            os.path.join(
-                UPLOAD_FOLDER, 
-                filename + file.filename[file.filename.find('.'):]
-                )
-            )
+        input_path = os.path.join(UPLOAD_FOLDER, filename + file.filename[file.filename.find('.'):])
+        file.save(input_path)
         answer['Сообщение'] = 'Файл успешно загружен!'
         answer['Успех'] = True
         answer['Путь'] = filename
@@ -112,6 +108,60 @@ def show_file():
         answer['Данные'] = pd.read_csv(file_path).to_dict()
         return answer
     else:
-        answer['Данные'] = 'Не поддерживаемы тип'
+        answer['Данные'] = 'Не поддерживаемый тип'
         return answer
     
+@app.route("/start", methods=['POST']) 
+def start_model():
+    
+    def get_users_predictions(UID, n, matrix):
+        recommended_items = pd.DataFrame(matrix.loc[UID]).dropna()
+        recommended_items.columns = ['predicted_rating']
+        recommended_items = recommended_items.sort_values('predicted_rating', ascending=False)    
+        recommended_items = recommended_items.head(n)
+        return recommended_items.index.tolist()
+
+    def get_hybrid_predictions(UID, n, matrix, inject_data, inject_column, n_inject=3):
+        recommended_items = pd.DataFrame(matrix.loc[UID])
+        recommended_items.columns = ['predicted_rating']
+        injection = inject_data.loc[UID, inject_column][:n_inject]
+        recommended_items = recommended_items.drop(injection)
+        recommended_items = recommended_items.dropna()
+        recommended_items = recommended_items.sort_values('predicted_rating', ascending=False)    
+        recommended_items = recommended_items.head(n - len(injection))
+        injection.extend(recommended_items.index.tolist())
+        return injection
+    
+    full = pd.read_csv('full_antitest.csv', index_col=0)
+    nofact = pd.read_csv(input_path, index_col=0)
+    test = pd.merge(nofact, full, how='left', on=['UID', 'JID'])
+    SVD_matrix = test.pivot_table(index='UID', columns='JID', values='SVD_Prediction')
+    SVD_fullmatrix = full.pivot_table(index='UID', columns='JID', values='SVD_Prediction')
+    testm = test.copy().groupby('UID', as_index=False).SVD_Prediction.agg({'Top 1': 'max'})
+    testm = testm.set_index('UID')
+    SVD_recs = []
+    for user in testm.index:
+      SVD_predictions = get_users_predictions(user, 10, SVD_matrix)
+      SVD_recs.append(SVD_predictions)     
+    testm['SVD Top 10'] = SVD_recs
+    SVD_hybridrecs = []
+    for user in testm.index:
+      SVD_hybridpredictions = get_hybrid_predictions(UID=user, n=10, matrix=SVD_fullmatrix, inject_data=testm, inject_column='SVD Top 10', n_inject=10)
+      SVD_hybridrecs.append(SVD_hybridpredictions)   
+    testm['SVD HybridTop 10'] = SVD_hybridrecs
+
+    maskl = testm['SVD HybridTop 10'].apply(lambda x: len(x) != 10)
+    users = testm[maskl].index
+
+    for i in users:
+      missing = 10 - len(testm.loc[i, 'SVD HybridTop 10'])
+      joke = 0
+      for m in range(missing):
+        joke = testm.loc[i, 'SVD HybridTop 10'][m]
+        mask = testm['SVD HybridTop 10'].apply(lambda x: x[0] == joke)
+        pair = testm[mask]['SVD HybridTop 10'].apply(lambda x: x[1])
+        pair = pd.DataFrame(pair)
+        pair = pair[pair['SVD HybridTop 10'].isin(testm.loc[i, 'SVD HybridTop 10']) == False]
+        testm.loc[i, 'SVD HybridTop 10'].append(pair['SVD HybridTop 10'].mode().loc[0])
+    testm['result'] = testm['Top 1'].apply(lambda x: list([[x]])) + testm['SVD HybridTop 10'].apply(lambda x: list([x]))
+    testm['result'].to_frame().to_csv('jester_result.csv')
