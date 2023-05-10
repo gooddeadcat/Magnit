@@ -132,8 +132,9 @@ def start_model():
         injection.extend(recommended_items.index.tolist())
         return injection
     
-    full = pd.read_csv('full_antitest.csv', index_col=0)
+    full = pd.read_csv(os.path.join(UPLOAD_FOLDER, 'full_antitest.csv', index_col=0))
     nofact = pd.read_csv(input_path, index_col=0)
+    
     test = pd.merge(nofact, full, how='left', on=['UID', 'JID'])
     SVD_matrix = test.pivot_table(index='UID', columns='JID', values='SVD_Prediction')
     SVD_fullmatrix = full.pivot_table(index='UID', columns='JID', values='SVD_Prediction')

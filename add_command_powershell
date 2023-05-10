@@ -4,7 +4,7 @@ Set-Alias -Name go -Value go_jester
 Function build_jester {docker build --pull --rm -f "Dockerfile" -t jester "."}
 Set-Alias -Name build -Value build_jester
 
-Function run_jester {docker run --rm -p 5000:5000 -v ~/jester/log:/jester/log -v ~/jester/data:/jester/data --name j_script jester:latest}
+Function run_jester {docker run --rm -p 5000:5000 -v /jester/log:/jester/log -v /jester/data:/jester/data --name j_script jester:latest}
 
 Function run_jester {docker run --rm -p 5000:5000 -v C:\Users\Klim\Desktop\Анализ Данных\Python\Magnit\jester\log:/jester/log -v C:\Users\Klim\Desktop\Анализ Данных\Python\Magnit\jester\data:/jester/data --name j_script jester:latest}
 Set-Alias -Name joke -Value run_jester
